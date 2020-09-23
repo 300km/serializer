@@ -294,12 +294,15 @@ final class XmlSerializationVisitor extends AbstractVisitor implements Serializa
         }
 
         if ($addEnclosingElement = !$this->isInLineCollection($metadata) && !$metadata->inline) {
-            $namespace = null !== $metadata->xmlNamespace
-                ? $metadata->xmlNamespace
-                : $this->getClassDefaultNamespace($this->objectMetadataStack->top());
-
-            $element = $this->createElement($metadata->serializedName, $namespace);
-            $this->currentNode->appendChild($element);
+            $elementName = $metadata->serializedName;
+            if ('' !== $namespace = (string) $metadata->xmlNamespace) {
+                if ( ! $prefix = $this->currentNode->lookupPrefix($namespace)) {
+                    $prefix = 'ns-'.substr(sha1($namespace), 0, 8);
+                }
+                $element = $this->document->createElementNS($namespace, $prefix.':'.$elementName);
+            } else {
+                $element = $this->document->createElement($elementName);
+            }
             $this->setCurrentNode($element);
         }
 
@@ -322,8 +325,9 @@ final class XmlSerializationVisitor extends AbstractVisitor implements Serializa
         if ($addEnclosingElement) {
             $this->revertCurrentNode();
 
-            if ($this->isElementEmpty($element) && (null === $v || $this->isSkippableCollection($metadata) || $this->isSkippableEmptyObject($node, $metadata))) {
-                $this->currentNode->removeChild($element);
+            if ($element->hasChildNodes() || $element->hasAttributes()
+                || (isset($metadata->type['name']) && $metadata->type['name'] === 'array' && isset($metadata->type['params'][1]))) {
+                $this->currentNode->appendChild($element);
             }
         }
 

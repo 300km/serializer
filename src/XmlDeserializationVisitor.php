@@ -189,13 +189,7 @@ final class XmlDeserializationVisitor extends AbstractVisitor implements NullAwa
             }
         }
 
-        if (null !== $namespace) {
-            $prefix = uniqid('ns-');
-            $data->registerXPathNamespace($prefix, $namespace);
-            $nodes = $data->xpath(sprintf('%s:%s', $prefix, $entryName));
-        } else {
-            $nodes = $data->xpath($entryName);
-        }
+        $nodes = $data->children($namespace)->$entryName;
 
         if (!\count($nodes)) {
             return [];
@@ -321,32 +315,24 @@ final class XmlDeserializationVisitor extends AbstractVisitor implements NullAwa
             return $v;
         }
 
-        if ($metadata->xmlNamespace) {
-            $node = $data->children($metadata->xmlNamespace)->$name;
-            if (!$node->count()) {
-                throw new NotAcceptableException();
+        if ('' !== $namespace = (string) $metadata->xmlNamespace) {
+            $registeredNamespaces = $data->getDocNamespaces();
+            if (false === $prefix = array_search($namespace, $registeredNamespaces)) {
+                $prefix = uniqid('ns-');
+                $data->registerXPathNamespace($prefix, $namespace);
             }
-        } elseif ('' === $metadata->xmlNamespace) {
-            // See #1087 - element must be like: <element xmlns="" /> - https://www.w3.org/TR/REC-xml-names/#iri-use
-            // Use of an empty string in a namespace declaration turns it into an "undeclaration".
-            $nodes = $data->xpath('./' . $name);
+            $elementName = ('' === $prefix) ? $name : $prefix.':'.$name;
+            $nodes = $data->xpath('./'.$elementName);
             if (empty($nodes)) {
-                throw new NotAcceptableException();
+                return;
             }
             $node = reset($nodes);
         } else {
-            $namespaces = $data->getDocNamespaces();
-            if (isset($namespaces[''])) {
-                $prefix = uniqid('ns-');
-                $data->registerXPathNamespace($prefix, $namespaces['']);
-                $nodes = $data->xpath('./' . $prefix . ':' . $name);
-            } else {
-                $nodes = $data->xpath('./' . $name);
+            if (!isset($data->$name)) {
+                return;
             }
-            if (empty($nodes)) {
-                throw new NotAcceptableException();
-            }
-            $node = reset($nodes);
+
+            $node = $data->$name;
         }
 
         if ($metadata->xmlKeyValuePairs) {
